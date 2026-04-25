@@ -47,7 +47,6 @@ int findFreeBlock() {
             return i;
         }
     }
-    printf("Storage full! Delete files first!");
     return -1;
 }
 
