@@ -194,43 +194,63 @@ int main(int argc, char **argv) {
 
 
      ---- Saver ----
-    void format(FileSystem *fs, bool suppress_message) {
-    // Clear the physical disk
-    memset((*fs).disk, 0, TOTAL_BLOCKS * BLOCK_SIZE);
-    
-    // Initialize Free Map: First 10 blocks reserved
+    char freemap_get(int block) {
+    return disk[block];
+}
+
+void freemap_set(int block, char val) {
+    disk[block] = val;
+}
+
+// ---- File table helpers ----
+// The file table lives in the disk itself — the filename prefix of each block.
+
+char *block_name_ptr(int block) {
+    return &disk[block * BLOCK_SIZE];
+}
+
+char *block_data_ptr(int block) {
+    return &disk[block * BLOCK_SIZE + MAX_FILENAME];
+}
+
+// ---- Core logic ----
+
+void format(bool suppress_message) {
+    memset(disk, 0, sizeof(disk));
     for (int i = 0; i < RESERVED_BLOCKS; i++) {
-        fs->free_map[i] = 1;
+        freemap_set(i, '1'); // reserved blocks marked used
     }
-    for (int i = RESERVED_BLOCKS; i < TOTAL_BLOCKS; i++) {
-        fs->free_map[i] = 0;
-    }
-    
-    // Clears the File Table
-    memset((*fs).file_table, 0, sizeof((*fs).file_table));
-    
     if (!suppress_message) {
         printf("Success: Disk formatted successfully.\n");
     }
 }
 
-void init_fs(FileSystem *fs) {
-    format(fs, true);
+void init_fs() {
+    format(true);
 }
 
-void create_file(FileSystem *fs, const char *filename) {
+int find_file_block(const char *filename) {
+    for (int i = RESERVED_BLOCKS; i < TOTAL_BLOCKS; i++) {
+        if (freemap_get(i) == '1' && strncmp(block_name_ptr(i), filename, MAX_FILENAME) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void create_file(const char *filename) {
     if (strlen(filename) >= MAX_FILENAME) {
         printf("Error: Filename exceeds the 32-byte limit.\n");
         return;
     }
-    if (find_file_index(fs, filename) != -1) {
+    if (find_file_block(filename) != -1) {
         printf("Error: A file named '%s' already exists.\n", filename);
         return;
     }
 
     int block_idx = -1;
     for (int i = RESERVED_BLOCKS; i < TOTAL_BLOCKS; i++) {
-        if (fs->free_map[i] == 0) {
+        if (freemap_get(i) == '0') {
             block_idx = i;
             break;
         }
@@ -241,89 +261,67 @@ void create_file(FileSystem *fs, const char *filename) {
         return;
     }
 
-    // Allocate in map and update file table
-    (*fs).free_map[block_idx] = 1;
-strncpy((*fs).file_table[block_idx], filename, MAX_FILENAME - 1);
-(*fs).file_table[block_idx][MAX_FILENAME - 1] = '\0';
-
-    // Writes the filename to the first 32 bytes of the physical block
-    int start_byte = block_idx * BLOCK_SIZE;
-    strncpy((char *)((*fs).disk + start_byte), filename, MAX_FILENAME);
+    freemap_set(block_idx, '1');
+    strncpy(block_name_ptr(block_idx), filename, MAX_FILENAME - 1);
+    block_name_ptr(block_idx)[MAX_FILENAME - 1] = '\0';
 
     printf("Success: File '%s' created at block %d.\n", filename, block_idx);
 }
 
-void read_file(FileSystem *fs, const char *filename) {
-    int block_idx = find_file_index(fs, filename);
+void read_file(const char *filename) {
+    int block_idx = find_file_block(filename);
     if (block_idx == -1) {
         printf("Error: File '%s' does not exist.\n", filename);
         return;
     }
-
-    // Data starts at byte 32 within the block
-    int start_byte = block_idx * BLOCK_SIZE + MAX_FILENAME;
 
     printf("\n--- Contents of %s ---\n", filename);
-    // Print bytes until we hit a null terminator or max data limit
+    char *data = block_data_ptr(block_idx);
     for (int i = 0; i < MAX_DATA; i++) {
-        char c = (*fs).disk[start_byte + i];
-        if (c == '\0') break;
-        putchar(c);
+        if (data[i] == '\0') break;
+        putchar(data[i]);
     }
-    printf("\n--\n\n");
+    printf("\n---\n\n");
 }
 
-void write_file(FileSystem *fs, const char *filename, const char *data) {
-    int block_idx = find_file_index(fs, filename);
+void write_file(const char *filename, const char *data) {
+    int block_idx = find_file_block(filename);
     if (block_idx == -1) {
         printf("Error: File '%s' does not exist.\n", filename);
         return;
     }
-
     if (strlen(data) > MAX_DATA) {
-        printf("Error: Data exceeds the maximum file size of 480 bytes.\n");
+        printf("Error: Data exceeds the maximum file size of %d bytes.\n", MAX_DATA);
         return;
     }
 
-    int start_byte = block_idx * BLOCK_SIZE + MAX_FILENAME;
-
-    /
-    memset(&(*fs).disk[start_byte], 0, MAX_DATA);
-    
-    // Writes the new data
-    strncpy((char *)&(*fs).disk[start_byte], data, MAX_DATA);
+    char *dest = block_data_ptr(block_idx);
+    memset(dest, 0, MAX_DATA);
+    strncpy(dest, data, MAX_DATA);
     printf("Success: Data written to '%s'.\n", filename);
 }
 
-void delete_file(FileSystem *fs, const char *filename) {
-    int block_idx = find_file_index(fs, filename);
+void delete_file(const char *filename) {
+    int block_idx = find_file_block(filename);
     if (block_idx == -1) {
         printf("Error: File '%s' does not exist.\n", filename);
         return;
     }
 
-    // Free the block and remove from table
-    (*fs).free_map[block_idx] = 0;
-memset((*fs).file_table[block_idx], 0, MAX_FILENAME);
-
-    // Overwrite the physical disk block with null bytes
-    int start_byte = block_idx * BLOCK_SIZE;
-    memset(&(*fs).disk[start_byte], 0, BLOCK_SIZE);
-
+    freemap_set(block_idx, '0');
+    memset(block_name_ptr(block_idx), 0, BLOCK_SIZE); // wipe name + data
     printf("Success: File '%s' deleted.\n", filename);
 }
 
-void ls(FileSystem *fs) {
+void ls() {
     bool files_found = false;
     printf("\nFiles in root directory:\n");
     for (int i = RESERVED_BLOCKS; i < TOTAL_BLOCKS; i++) {
-        if ((*fs).free_map[i] == 1 && (*fs).file_table[i][0] != '\0') {
-    printf(" - %s (Stored in Block %d)\n", (*fs).file_table[i], i);
-    files_found = true;
-}
+        if (freemap_get(i) == '1' && block_name_ptr(i)[0] != '\0') {
+            printf(" - %s (Block %d)\n", block_name_ptr(i), i);
+            files_found = true;
         }
     }
-
     if (!files_found) {
         printf(" (Empty)\n");
     }
