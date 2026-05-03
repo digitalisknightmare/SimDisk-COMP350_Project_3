@@ -7,7 +7,7 @@ int const NUM_BLOCKS = 100;
 char filesystem[BLOCK_SIZE * NUM_BLOCKS];
 char *filetable[NUM_BLOCKS];
 
-void userPrompts()
+void user_prompts()
 {
     printf("Available commands:\n"
            "--> format\n"
@@ -170,7 +170,7 @@ void executecommand(char *command)
     }
     else if (match(command, "help"))
     {
-        userPrompts();
+        user_prompts();
     }
     else
     {
@@ -201,7 +201,7 @@ int main()
     printf("Loading file table from disk...\n");
     printf("File table loaded successfully.\n");
     printf("Welcome to the simple file system simulator.\n");
-    userPrompts();
+    user_prompts();
     mainloop();
     return 0;
 }
