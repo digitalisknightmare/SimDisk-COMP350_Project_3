@@ -4,6 +4,24 @@
 int const BLOCK_SIZE = 544;
 int const NUM_BLOCKS = 100;
 
+"""
+Here's how the filesystem works... it's just a long list of chars.
+Each 'block' is 544 characters, 32 for name, 512 for information. They
+aren't inforced in any particular data structure. You simply need arthmatic 
+to move around and compute where things should be.
+
+The reason for that is the first 10 blocks (the freemap) won't adhere to the 
+same data structure as cleanly. The freemap range is just true or false, 1 or 0
+if a certain block is free... the rest of the data has structure, the format being
+[name 32 chars][data 512 chars] but to get them to work together I decided too use 
+chars for everything.
+
+the freemap is simple. The character in the 10th character of the filesystem (1 or 0)
+tells you if the 10th BLOCK (so much further down the character chain) is available. 
+The 11th position character of filesystem tells you if the 11th block is available and
+so on.
+"""
+
 char filesystem[BLOCK_SIZE * NUM_BLOCKS];
 char *filetable[NUM_BLOCKS];
 
