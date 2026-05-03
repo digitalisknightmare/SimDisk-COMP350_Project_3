@@ -196,7 +196,7 @@ int main(int argc, char **argv) {
      ---- Saver ----
     void format(FileSystem *fs, bool suppress_message) {
     // Clear the physical disk
-    memset(fs->disk, 0, TOTAL_BLOCKS * BLOCK_SIZE);
+    memset((*fs).disk, 0, TOTAL_BLOCKS * BLOCK_SIZE);
     
     // Initialize Free Map: First 10 blocks reserved
     for (int i = 0; i < RESERVED_BLOCKS; i++) {
@@ -206,8 +206,8 @@ int main(int argc, char **argv) {
         fs->free_map[i] = 0;
     }
     
-    // Clear the File Table
-    memset(fs->file_table, 0, sizeof(fs->file_table));
+    // Clears the File Table
+    memset((*fs).file_table, 0, sizeof((*fs).file_table));
     
     if (!suppress_message) {
         printf("Success: Disk formatted successfully.\n");
@@ -242,13 +242,13 @@ void create_file(FileSystem *fs, const char *filename) {
     }
 
     // Allocate in map and update file table
-    fs->free_map[block_idx] = 1;
-    strncpy(fs->file_table[block_idx], filename, MAX_FILENAME - 1);
-    fs->file_table[block_idx][MAX_FILENAME - 1] = '\0'; // Ensure null-termination
+    (*fs).free_map[block_idx] = 1;
+strncpy((*fs).file_table[block_idx], filename, MAX_FILENAME - 1);
+(*fs).file_table[block_idx][MAX_FILENAME - 1] = '\0';
 
-    // Write the filename to the first 32 bytes of the physical block
+    // Writes the filename to the first 32 bytes of the physical block
     int start_byte = block_idx * BLOCK_SIZE;
-    strncpy((char *)&fs->disk[start_byte], filename, MAX_FILENAME);
+    strncpy((char *)((*fs).disk + start_byte), filename, MAX_FILENAME);
 
     printf("Success: File '%s' created at block %d.\n", filename, block_idx);
 }
@@ -266,7 +266,7 @@ void read_file(FileSystem *fs, const char *filename) {
     printf("\n--- Contents of %s ---\n", filename);
     // Print bytes until we hit a null terminator or max data limit
     for (int i = 0; i < MAX_DATA; i++) {
-        char c = fs->disk[start_byte + i];
+        char c = (*fs).disk[start_byte + i];
         if (c == '\0') break;
         putchar(c);
     }
@@ -288,11 +288,10 @@ void write_file(FileSystem *fs, const char *filename, const char *data) {
     int start_byte = block_idx * BLOCK_SIZE + MAX_FILENAME;
 
     /
-    memset(&fs->disk[start_byte], 0, MAX_DATA);
+    memset(&(*fs).disk[start_byte], 0, MAX_DATA);
     
-    // Write the new data
-    strncpy((char *)&fs->disk[start_byte], data, MAX_DATA);
-    
+    // Writes the new data
+    strncpy((char *)&(*fs).disk[start_byte], data, MAX_DATA);
     printf("Success: Data written to '%s'.\n", filename);
 }
 
@@ -304,12 +303,12 @@ void delete_file(FileSystem *fs, const char *filename) {
     }
 
     // Free the block and remove from table
-    fs->free_map[block_idx] = 0;
-    memset(fs->file_table[block_idx], 0, MAX_FILENAME);
+    (*fs).free_map[block_idx] = 0;
+memset((*fs).file_table[block_idx], 0, MAX_FILENAME);
 
     // Overwrite the physical disk block with null bytes
     int start_byte = block_idx * BLOCK_SIZE;
-    memset(&fs->disk[start_byte], 0, BLOCK_SIZE);
+    memset(&(*fs).disk[start_byte], 0, BLOCK_SIZE);
 
     printf("Success: File '%s' deleted.\n", filename);
 }
@@ -318,9 +317,10 @@ void ls(FileSystem *fs) {
     bool files_found = false;
     printf("\nFiles in root directory:\n");
     for (int i = RESERVED_BLOCKS; i < TOTAL_BLOCKS; i++) {
-        if (fs->free_map[i] == 1 && fs->file_table[i][0] != '\0') {
-            printf(" - %s (Stored in Block %d)\n", fs->file_table[i], i);
-            files_found = true;
+        if ((*fs).free_map[i] == 1 && (*fs).file_table[i][0] != '\0') {
+    printf(" - %s (Stored in Block %d)\n", (*fs).file_table[i], i);
+    files_found = true;
+}
         }
     }
 
