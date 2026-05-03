@@ -1,0 +1,1 @@
+gcc project.c && ./a.out
