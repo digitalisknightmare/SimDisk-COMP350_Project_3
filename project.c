@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 
-int const BLOCK_SIZE = 544;
-int const NUM_BLOCKS = 100;
+#define BLOCK_SIZE 544
+#define NUM_BLOCKS 100
 
 // Here's how the filesystem works... it's just a long list of chars.
 // Each 'block' is 544 characters, 32 for name, 512 for information. They
